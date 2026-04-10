@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Cattle Dip • Acaricide IoT PWA</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="data:application/manifest+json,{{MANIFEST}}" />
+    
+    <!-- Theme color for PWA -->
+    <meta name="theme-color" content="#0f172a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Cattle Dip" />
+    
+    <!-- Icons & Fonts -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Chart.js + Annotation Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+    
+    <style>
+        /* [Keep all existing CSS exactly as before] */
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --warning: #f59e0b;
+            --accent: #8b5cf6;
+            --border-light: #334155;
+        }
+
+        body.light {
+            --bg: #f1f5f9;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-dim: #475569;
+            --border-light: #cbd5e1;
+        }
+
+        * { transition: background-color 0.2s ease, color 0.1s; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            margin: 0; padding-bottom: 50px;
+        }
+
+        header {
+            background: var(--card-bg);
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-light);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header-left { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 16px;
+            border: 1px solid var(--border-light);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: 0.2s;
+        }
+
+        .card-wide { grid-column: span 2; }
+
+        .value { font-size: 2.8rem; font-weight: 800; margin: 10px 0; line-height: 1.2; }
+        .label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-dim); }
+        .sub-text { font-size: 0.9rem; color: var(--text-dim); }
+
+        .bg-red { background: var(--danger) !important; color: white; }
+        .bg-green { background: var(--success) !important; color: white; }
+        .bg-blue { background: var(--info) !important; color: white; }
+        .bg-red .sub-text, .bg-green .sub-text, .bg-blue .sub-text { color: rgba(255,255,255,0.8); }
+
+        .chart-container {
+            background: var(--card-bg);
+            padding: 15px;
+            border-radius: 16px;
+            border: 1px solid var(--border-light);
+            height: 300px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .led { width: 12px; height: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; background: #475569; }
+        .led.active { background: #4ade80; box-shadow: 0 0 12px #4ade80; }
+
+        .alert-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 40px;
+            background: var(--success);
+            color: white;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        button {
+            background: var(--accent);
+            color: white;
+            border: none;
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        button:hover { opacity: 0.9; transform: scale(1.02); }
+        button.active { background: var(--success); }
+
+        .theme-toggle { background: transparent; border: 1px solid var(--border-light); color: var(--text-main); }
+        .simulate-toggle { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+
+        hr { width: 100%; border: 0.5px solid var(--border-light); margin: 15px 0; }
+
+        /* PWA install banner */
+        #installBanner {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--card-bg);
+            color: var(--text-main);
+            padding: 12px 24px;
+            border-radius: 40px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+            border: 1px solid var(--accent);
+            display: none;
+            align-items: center;
+            gap: 20px;
+            z-index: 1000;
+        }
+        #installBanner button {
+            background: var(--accent);
+            padding: 8px 20px;
+        }
+
+        @media (max-width: 900px) { .card-wide { grid-column: span 1; } }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="header-left">
+        <h1 style="margin:0;"><i class="fas fa-flask" style="color:var(--accent)"></i> Acaricide Dip • Smart IoT</h1>
+        <div id="alert-badge" class="alert-badge">
+            <i class="fas fa-bell"></i> <span id="alert-text">All systems normal</span>
+        </div>
+    </div>
+    <div class="header-right">
+        <div class="simulate-toggle">
+            <i class="fas fa-flask"></i>
+            <label>
+                <input type="checkbox" id="simulateMode"> Demo Mode
+            </label>
+        </div>
+        <button id="notifyToggle" title="Enable push notifications"><i class="fas fa-bell"></i> Notify</button>
+        <button id="exportBtn"><i class="fas fa-download"></i> Export CSV</button>
+        <button id="themeToggle" class="theme-toggle"><i class="fas fa-moon"></i> Dark</button>
+        <div id="status" style="color:var(--text-dim); font-size:0.8rem; min-width:160px;">Connecting...</div>
+    </div>
+</header>
+
+<div class="container">
+    <!-- Temperature KPI -->
+    <div class="card" id="temp-card">
+        <i class="fas fa-thermometer-half fa-2x"></i>
+        <div class="label">Temperature</div>
+        <div class="value" id="temp-val">--</div>
+        <div class="sub-text">&deg;C</div>
+    </div>
+
+    <!-- Depth KPI (HC-SR04) -->
+    <div class="card" id="depth-card">
+        <i class="fas fa-ruler-vertical fa-2x"></i>
+        <div class="label">Tank Depth (Distance)</div>
+        <div class="value" id="depth-val">--</div>
+        <div class="sub-text" id="depth-status">Syncing...</div>
+    </div>
+
+    <!-- Acaricide Concentration -->
+    <div class="card">
+        <i class="fas fa-vial fa-2x"></i>
+        <div class="label">Acaricide Conc.</div>
+        <div class="value" id="conc-val">--</div>
+        <div class="sub-text" id="conc-status">Checking Mix...</div>
+    </div>
+
+    <!-- Predictive Days Card -->
+    <div class="card">
+        <i class="fas fa-hourglass-half fa-2x"></i>
+        <div class="label">Est. Days to Refill</div>
+        <div class="value" id="days-left" style="color:var(--accent)">--</div>
+        <div class="sub-text" id="refill-date">Calculating...</div>
+    </div>
+
+    <!-- Main Trend Chart (wide) -->
+    <div class="card-wide chart-container">
+        <canvas id="mainChart"></canvas>
+    </div>
+
+    <!-- Cattle Count -->
+    <div class="card">
+        <div class="label">Daily Cattle Count</div>
+        <div class="value" id="count-val" style="color:var(--accent)">--</div>
+        <i class="fas fa-cow" style="font-size: 3rem; margin-top: 10px;"></i>
+        <div class="sub-text" id="last-dip-time">Last dip: --</div>
+    </div>
+
+    <!-- Weight Chart -->
+    <div class="card chart-container">
+        <canvas id="weightChart"></canvas>
+    </div>
+
+    <!-- Pump Status + Last Weight -->
+    <div class="card" style="justify-content: space-around;">
+        <div style="text-align: left; width: 100%;">
+            <p><span id="spray-led" class="led"></span> <b>Spray Pump:</b> <span id="spray-txt">OFF</span></p>
+            <p><span id="refill-led" class="led"></span> <b>Refill Pump:</b> <span id="refill-txt">OFF</span></p>
+        </div>
+        <hr>
+        <div class="label">Last Weight Recorded</div>
+        <div class="value" id="weight-val" style="font-size: 1.8rem;">-- g</div>
+    </div>
+</div>
+
+<!-- PWA Install Banner -->
+<div id="installBanner">
+    <i class="fas fa-download"></i>
+    <span>Install Cattle Dip as an app for offline access</span>
+    <button id="installBtn">Install</button>
+    <button id="dismissBtn" style="background:transparent; color:var(--text-dim);"><i class="fas fa-times"></i></button>
+</div>
+
+<script>
+    // ----- PWA MANIFEST (embedded as data URL) -----
+    const manifest = {
+        name: "Cattle Dip Acaricide Monitor",
+        short_name: "CattleDip",
+        description: "IoT dashboard for automated cattle dip analytics",
+        start_url: ".",
+        display: "standalone",
+        orientation: "portrait",
+        background_color: "#0f172a",
+        theme_color: "#0f172a",
+        icons: [
+            {
+                src: "https://cdn-icons-png.flaticon.com/512/1998/1998610.png",
+                sizes: "512x512",
+                type: "image/png",
+                purpose: "any maskable"
+            }
+        ]
+    };
+    
+    // Inject manifest as data URL
+    const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+    const manifestURL = URL.createObjectURL(manifestBlob);
+    document.querySelector('link[rel="manifest"]').href = manifestURL;
+
+    // ----- SERVICE WORKER for offline caching -----
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register(
+                URL.createObjectURL(new Blob([`
+                    const CACHE_NAME = 'cattle-dip-v1';
+                    const urlsToCache = [
+                        '.',
+                        'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+                        'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js',
+                        'https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js'
+                    ];
+                    
+                    self.addEventListener('install', event => {
+                        event.waitUntil(
+                            caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+                        );
+                    });
+                    
+                    self.addEventListener('fetch', event => {
+                        event.respondWith(
+                            caches.match(event.request).then(response => response || fetch(event.request))
+                        );
+                    });
+                `], {type: 'application/javascript'}))
+            ).then(reg => console.log('SW registered', reg))
+            .catch(err => console.log('SW failed', err));
+        });
+    }
+
+    // ----- PWA INSTALL PROMPT -----
+    let deferredPrompt;
+    const installBanner = document.getElementById('installBanner');
+    const installBtn = document.getElementById('installBtn');
+    const dismissBtn = document.getElementById('dismissBtn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        installBanner.style.display = 'flex';
+    });
+
+    installBtn.addEventListener('click', () => {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            deferredPrompt.userChoice.then(choice => {
+                installBanner.style.display = 'none';
+                deferredPrompt = null;
+            });
+        }
+    });
+
+    dismissBtn.addEventListener('click', () => {
+        installBanner.style.display = 'none';
+    });
+
+    // ----- CORE DASHBOARD LOGIC (unchanged from previous version) -----
+    (function() {
+        const CONFIG = {
+            id: "3314650",
+            key: "BTZILKVBZTVJJV2T",
+            freq: 15000
+        };
+
+        let mainChart, weightChart;
+        let historicalFeeds = [];
+        const MAX_HISTORY = 20;
+        let notificationsEnabled = false;
+        let lastAlertHash = '';
+
+        function initCharts() {
+            const ctxMain = document.getElementById('mainChart').getContext('2d');
+            mainChart = new Chart(ctxMain, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Temp (°C)', borderColor: '#ef4444', data: [], tension: 0.3, yAxisID: 'y', pointRadius: 2 },
+                        { label: 'Conc (%)', borderColor: '#8b5cf6', data: [], tension: 0.3, yAxisID: 'y1', pointRadius: 2 }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { type: 'linear', position: 'left', grid: { color: '#334155' } },
+                        y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#f8fafc' } },
+                        annotation: {
+                            annotations: {
+                                tempSafeZone: {
+                                    type: 'box',
+                                    yMin: 25, yMax: 32,
+                                    backgroundColor: 'rgba(34,197,94,0.08)',
+                                    borderColor: '#22c55e',
+                                    label: { content: 'Safe Temp', enabled: true }
+                                },
+                                concSafeZone: {
+                                    type: 'box',
+                                    yMin: 30, yMax: 60,
+                                    yScaleID: 'y1',
+                                    backgroundColor: 'rgba(139,92,246,0.08)',
+                                    borderColor: '#8b5cf6',
+                                    label: { content: 'Optimal Conc', enabled: true }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            const ctxWeight = document.getElementById('weightChart').getContext('2d');
+            weightChart = new Chart(ctxWeight, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: 'Animal Weight (g)', backgroundColor: '#3b82f6', data: [] }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { labels: { color: '#f8fafc' } } },
+                    scales: { y: { grid: { color: '#334155' } } }
+                }
+            });
+        }
+
+        function updatePrediction(feeds) {
+            if (!feeds.length) return;
+            const recent = feeds.slice(-7).filter(f => f.field3 !== undefined);
+            if (recent.length < 2) return;
+            const counts = recent.map(f => parseFloat(f.field3) || 0);
+            const avgDaily = counts.reduce((a,b) => a+b, 0) / recent.length;
+            const USAGE_PER_COW = 0.25;
+            const dailyUsage = avgDaily * USAGE_PER_COW;
+            const latest = feeds[feeds.length-1];
+            const currentDistance = parseFloat(latest.field2);
+            const CRITICAL_DISTANCE = 8.0;
+            const daysLeft = (CRITICAL_DISTANCE - currentDistance) / dailyUsage;
+            document.getElementById('days-left').innerText = Math.max(0, daysLeft).toFixed(1);
+            const refillDate = new Date(Date.now() + daysLeft * 86400000);
+            document.getElementById('refill-date').innerText = daysLeft > 0 ? `Refill ~ ${refillDate.toLocaleDateString()}` : 'Refill needed now!';
+        }
+
+        function sendNotification(title, body) {
+            if (!("Notification" in window) || !notificationsEnabled) return;
+            if (Notification.permission === "granted") {
+                new Notification(title, { body, icon: 'https://cdn-icons-png.flaticon.com/512/1998/1998610.png', requireInteraction: true });
+            }
+        }
+
+        function updateAlerts(temp, distance, conc) {
+            const alerts = [];
+            if (temp > 32) alerts.push('High temperature');
+            if (temp < 20) alerts.push('Low temperature');
+            if (distance > 8) alerts.push('Tank critical – Refill!');
+            if (distance < 3) alerts.push('Tank overfilled');
+            if (conc < 20) alerts.push('Acaricide concentration too low');
+            if (conc > 70) alerts.push('Acaricide concentration too high');
+            
+            const badge = document.getElementById('alert-badge');
+            const alertSpan = document.getElementById('alert-text');
+            const alertMessage = alerts.length ? alerts.join(' • ') : 'All systems normal';
+            
+            if (alerts.length) {
+                badge.style.background = '#ef4444';
+                alertSpan.innerText = alertMessage;
+                if (notificationsEnabled) {
+                    const currentHash = alerts.sort().join('|');
+                    if (currentHash !== lastAlertHash) {
+                        lastAlertHash = currentHash;
+                        sendNotification('⚠️ Cattle Dip Alert', alertMessage);
+                    }
+                }
+            } else {
+                badge.style.background = '#22c55e';
+                alertSpan.innerText = alertMessage;
+                lastAlertHash = '';
+            }
+        }
+
+        function updateCards(feed) {
+            const t = parseFloat(feed.field1) || 0;
+            const d = parseFloat(feed.field2) || 0;
+            const conc = parseFloat(feed.field7) || 0;
+            const count = feed.field3 || "0";
+            const weight = parseInt(feed.field6) || 0;
+
+            document.getElementById('temp-val').innerText = t.toFixed(1);
+            document.getElementById('temp-card').className = (t >= 20 && t <= 32) ? 'card bg-green' : 'card bg-red';
+
+            const dCard = document.getElementById('depth-card');
+            const dStat = document.getElementById('depth-status');
+            document.getElementById('depth-val').innerText = d.toFixed(1) + " cm";
+            if (d < 5) { dCard.className='card bg-green'; dStat.innerText="Level OK"; }
+            else if (d <= 8) { dCard.className='card bg-blue'; dStat.innerText="Medium Level"; }
+            else { dCard.className='card bg-red'; dStat.innerText="Critical – Refill!"; }
+
+            document.getElementById('conc-val').innerText = conc.toFixed(1);
+            const concStat = document.getElementById('conc-status');
+            if (conc >= 30 && conc <= 60) concStat.innerText = 'Optimal Mix';
+            else if (conc < 30) concStat.innerText = 'Too Dilute';
+            else concStat.innerText = 'Too Strong';
+
+            document.getElementById('count-val').innerText = count;
+            document.getElementById('weight-val').innerText = weight + ' g';
+            if (feed.created_at) {
+                document.getElementById('last-dip-time').innerText = `Last update: ${new Date(feed.created_at).toLocaleTimeString()}`;
+            }
+
+            togglePump('spray', feed.field4);
+            togglePump('refill', feed.field5);
+            updateAlerts(t, d, conc);
+        }
+
+        function togglePump(id, val) {
+            const led = document.getElementById(id+'-led');
+            const txt = document.getElementById(id+'-txt');
+            if (parseInt(val)===1) { led.classList.add('active'); txt.innerText="ACTIVE"; txt.style.color="#4ade80"; }
+            else { led.classList.remove('active'); txt.innerText="OFF"; txt.style.color="#94a3b8"; }
+        }
+
+        function updateGraphs(feeds) {
+            if (!feeds.length) return;
+            const labels = feeds.map(f => new Date(f.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}));
+            mainChart.data.labels = labels;
+            mainChart.data.datasets[0].data = feeds.map(f => parseFloat(f.field1) || null);
+            mainChart.data.datasets[1].data = feeds.map(f => parseFloat(f.field7) || null);
+            mainChart.update('none');
+            weightChart.data.labels = labels;
+            weightChart.data.datasets[0].data = feeds.map(f => parseFloat(f.field6) || null);
+            weightChart.update('none');
+        }
+
+        function generateSimulatedFeed() {
+            const last = historicalFeeds.length ? historicalFeeds[historicalFeeds.length-1] : null;
+            const baseTemp = last ? parseFloat(last.field1) : 28;
+            const baseDistance = last ? parseFloat(last.field2) : 6;
+            const baseConc = last ? parseFloat(last.field7) : 45;
+            return {
+                created_at: new Date().toISOString(),
+                field1: Math.max(18, Math.min(38, baseTemp + (Math.random()-0.5)*2)).toFixed(1),
+                field2: Math.max(3, Math.min(12, baseDistance + 0.05 + (Math.random()-0.3)*0.6)).toFixed(1),
+                field3: Math.floor(20 + Math.random()*40),
+                field4: Math.random() > 0.7 ? 1 : 0,
+                field5: (baseDistance > 8) ? 1 : 0,
+                field6: Math.floor(350 + Math.random()*250),
+                field7: Math.max(10, Math.min(80, baseConc + (Math.random()-0.5)*5)).toFixed(1)
+            };
+        }
+
+        async function fetchRealData() {
+            const res = await fetch(`https://api.thingspeak.com/channels/${CONFIG.id}/feeds.json?api_key=${CONFIG.key}&results=20`);
+            const data = await res.json();
+            return data.feeds || [];
+        }
+
+        async function sync() {
+            try {
+                let feeds;
+                const simulate = document.getElementById('simulateMode').checked;
+                if (simulate) {
+                    const newPoint = generateSimulatedFeed();
+                    historicalFeeds.push(newPoint);
+                    if (historicalFeeds.length > MAX_HISTORY) historicalFeeds.shift();
+                    feeds = [...historicalFeeds];
+                } else {
+                    feeds = await fetchRealData();
+                    historicalFeeds = feeds;
+                }
+                if (!feeds.length) throw new Error('No data');
+                updateCards(feeds[feeds.length-1]);
+                updateGraphs(feeds);
+                updatePrediction(feeds);
+                document.getElementById('status').innerHTML = `Live • ${new Date().toLocaleTimeString()}`;
+                if (simulate) document.getElementById('status').innerHTML += ' <span style="color:var(--warning)">(Demo)</span>';
+            } catch (e) {
+                document.getElementById('status').innerText = "⚠️ Sync error – retrying...";
+            }
+        }
+
+        function setupExport() {
+            document.getElementById('exportBtn').addEventListener('click', () => {
+                window.open(`https://api.thingspeak.com/channels/${CONFIG.id}/feeds.csv?api_key=${CONFIG.key}&results=8000`, '_blank');
+            });
+        }
+
+        function setupTheme() {
+            const btn = document.getElementById('themeToggle');
+            btn.addEventListener('click', () => {
+                document.body.classList.toggle('light');
+                const isLight = document.body.classList.contains('light');
+                btn.innerHTML = `<i class="fas ${isLight ? 'fa-sun' : 'fa-moon'}"></i> ${isLight ? 'Light' : 'Dark'}`;
+                if (mainChart) {
+                    mainChart.options.scales.y.grid.color = isLight ? '#cbd5e1' : '#334155';
+                    mainChart.update();
+                }
+            });
+        }
+
+        function setupNotifications() {
+            const btn = document.getElementById('notifyToggle');
+            if ("Notification" in window && Notification.permission === "granted") {
+                notificationsEnabled = true;
+                btn.classList.add('active');
+                btn.innerHTML = '<i class="fas fa-bell"></i> Notify On';
+            }
+            btn.addEventListener('click', () => {
+                if (!("Notification" in window)) return alert("Notifications not supported");
+                if (Notification.permission === "granted") {
+                    notificationsEnabled = !notificationsEnabled;
+                    btn.classList.toggle('active', notificationsEnabled);
+                    btn.innerHTML = notificationsEnabled ? '<i class="fas fa-bell"></i> Notify On' : '<i class="fas fa-bell-slash"></i> Notify Off';
+                } else if (Notification.permission !== "denied") {
+                    Notification.requestPermission().then(perm => {
+                        if (perm === "granted") {
+                            notificationsEnabled = true;
+                            btn.classList.add('active');
+                            btn.innerHTML = '<i class="fas fa-bell"></i> Notify On';
+                            sendNotification('✅ Notifications Enabled', 'You will now receive alerts.');
+                        }
+                    });
+                } else {
+                    alert("Notifications blocked. Enable in browser settings.");
+                }
+            });
+        }
+
+        initCharts();
+        setupExport();
+        setupTheme();
+        setupNotifications();
+        sync();
+        setInterval(sync, CONFIG.freq);
+    })();
+</script>
+</body>
+</html>
